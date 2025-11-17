@@ -17,7 +17,8 @@ enum UpdateMsg {
 }
 
 lazy_static::lazy_static! {
-    static ref TX_MSG : Mutex<Sender<UpdateMsg>> = Mutex::new(start_auto_update_check());
+    // 注释掉启动自动更新检查的部分
+    // static ref TX_MSG : Mutex<Sender<UpdateMsg>> = Mutex::new(start_auto_update_check());
 }
 
 static CONTROLLING_SESSION_COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -29,20 +30,21 @@ pub fn update_controlling_session_count(count: usize) {
 }
 
 pub fn start_auto_update() {
-    let _sender = TX_MSG.lock().unwrap();
+    // 直接注释掉自动更新的启动代码
+    // let _sender = TX_MSG.lock().unwrap();
 }
 
 #[allow(dead_code)]
 pub fn manually_check_update() -> ResultType<()> {
-    let sender = TX_MSG.lock().unwrap();
-    sender.send(UpdateMsg::CheckUpdate)?;
+    // 直接禁用手动更新触发的逻辑
     Ok(())
 }
 
 #[allow(dead_code)]
 pub fn stop_auto_update() {
-    let sender = TX_MSG.lock().unwrap();
-    sender.send(UpdateMsg::Exit).unwrap_or_default();
+    // 注释掉停止自动更新的代码
+    // let sender = TX_MSG.lock().unwrap();
+    // sender.send(UpdateMsg::Exit).unwrap_or_default();
 }
 
 #[inline]
@@ -74,65 +76,70 @@ fn has_no_controlling_conns() -> bool {
     true
 }
 
-fn start_auto_update_check() -> Sender<UpdateMsg> {
-    let (tx, rx) = channel();
-    std::thread::spawn(move || start_auto_update_check_(rx));
-    return tx;
-}
+// 注释掉自动更新检查的线程启动
+// fn start_auto_update_check() -> Sender<UpdateMsg> {
+//     let (tx, rx) = channel();
+//     std::thread::spawn(move || start_auto_update_check_(rx));
+//     return tx;
+// }
 
 fn start_auto_update_check_(rx_msg: Receiver<UpdateMsg>) {
-    std::thread::sleep(Duration::from_secs(30));
-    if let Err(e) = check_update(false) {
-        log::error!("Error checking for updates: {}", e);
-    }
+    // 注释掉自动更新检查的线程逻辑
+    // std::thread::sleep(Duration::from_secs(30));
+    // if let Err(e) = check_update(false) {
+    //     log::error!("Error checking for updates: {}", e);
+    // }
 
-    const MIN_INTERVAL: Duration = Duration::from_secs(60 * 10);
-    const RETRY_INTERVAL: Duration = Duration::from_secs(60 * 30);
-    let mut last_check_time = Instant::now();
-    let mut check_interval = DUR_ONE_DAY;
-    loop {
-        let recv_res = rx_msg.recv_timeout(check_interval);
-        match &recv_res {
-            Ok(UpdateMsg::CheckUpdate) | Err(_) => {
-                if last_check_time.elapsed() < MIN_INTERVAL {
-                    // log::debug!("Update check skipped due to minimum interval.");
-                    continue;
-                }
-                // Don't check update if there are alive connections.
-                if !has_no_active_conns() {
-                    check_interval = RETRY_INTERVAL;
-                    continue;
-                }
-                if let Err(e) = check_update(matches!(recv_res, Ok(UpdateMsg::CheckUpdate))) {
-                    log::error!("Error checking for updates: {}", e);
-                    check_interval = RETRY_INTERVAL;
-                } else {
-                    last_check_time = Instant::now();
-                    check_interval = DUR_ONE_DAY;
-                }
-            }
-            Ok(UpdateMsg::Exit) => break,
-        }
-    }
+    // const MIN_INTERVAL: Duration = Duration::from_secs(60 * 10);
+    // const RETRY_INTERVAL: Duration = Duration::from_secs(60 * 30);
+    // let mut last_check_time = Instant::now();
+    // let mut check_interval = DUR_ONE_DAY;
+    // loop {
+    //     let recv_res = rx_msg.recv_timeout(check_interval);
+    //     match &recv_res {
+    //         Ok(UpdateMsg::CheckUpdate) | Err(_) => {
+    //             if last_check_time.elapsed() < MIN_INTERVAL {
+    //                 continue;
+    //             }
+    //             if !has_no_active_conns() {
+    //                 check_interval = RETRY_INTERVAL;
+    //                 continue;
+    //             }
+    //             if let Err(e) = check_update(matches!(recv_res, Ok(UpdateMsg::CheckUpdate))) {
+    //                 log::error!("Error checking for updates: {}", e);
+    //                 check_interval = RETRY_INTERVAL;
+    //             } else {
+    //                 last_check_time = Instant::now();
+    //                 check_interval = DUR_ONE_DAY;
+    //             }
+    //         }
+    //         Ok(UpdateMsg::Exit) => break,
+    //     }
+    // }
 }
 
 fn check_update(manually: bool) -> ResultType<()> {
     #[cfg(target_os = "windows")]
     let is_msi = crate::platform::is_msi_installed()?;
+    
+    // 直接禁用更新逻辑
     if !(manually || config::Config::get_bool_option(config::keys::OPTION_ALLOW_AUTO_UPDATE)) {
         return Ok(());
     }
-    if !do_check_software_update().is_ok() {
-        // ignore
-        return Ok(());
-    }
 
+    // 注释掉检测更新的代码
+    // if !do_check_software_update().is_ok() {
+    //     return Ok(());
+    // }
+
+    // 更新链接逻辑
     let update_url = crate::common::SOFTWARE_UPDATE_URL.lock().unwrap().clone();
     if update_url.is_empty() {
         log::debug!("No update available.");
     } else {
         let download_url = update_url.replace("tag", "download");
         let version = download_url.split('/').last().unwrap_or_default();
+        
         #[cfg(target_os = "windows")]
         let download_url = if cfg!(feature = "flutter") {
             format!(
@@ -144,6 +151,7 @@ fn check_update(manually: bool) -> ResultType<()> {
         } else {
             format!("{}/rustdesk-{}-x86-sciter.exe", download_url, version)
         };
+        
         log::debug!("New version available: {}", &version);
         let client = create_http_client();
         let Some(file_path) = get_download_file_from_url(&download_url) else {
@@ -184,7 +192,6 @@ fn check_update(manually: bool) -> ResultType<()> {
             let mut file = std::fs::File::create(&file_path)?;
             file.write_all(&file_data)?;
         }
-        // We have checked if the `conns`` is empty before, but we need to check again.
         // No need to care about the downloaded file here, because it's rare case that the `conns` are empty
         // before the download, but not empty after the download.
         if has_no_active_conns() {
@@ -235,15 +242,5 @@ fn update_new_version(is_msi: bool, version: &str, file_path: &PathBuf) {
             );
         }
     } else {
-        // unreachable!()
         log::error!(
-            "Failed to convert the file path to string: {}",
-            file_path.display()
-        );
-    }
-}
-
-pub fn get_download_file_from_url(url: &str) -> Option<PathBuf> {
-    let filename = url.split('/').last()?;
-    Some(std::env::temp_dir().join(filename))
-}
+            "Failed
